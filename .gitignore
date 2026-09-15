@@ -1,0 +1,6 @@
+.env
+.env.*
+.clasprc.json
+*.key
+*.pem
+
