@@ -183,7 +183,7 @@
     'use strict';
 
     const $ = id => document.getElementById(id);
-    const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzQtPLII2lneqQwY4LFpfpfLfp-opMJOFwBV4dgcqozave8TSzpOlaAja8ZXB7hcQ1I/exec';
+    const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwJYq1nUFE3lcBzDQRJ1ywOyCWw0wy7_DJQdZ8gJcIneM7ZK2G6IUy1Z90SN_VsCQpz/exec';
     const gasRuntime = Boolean(window.google && google.script && google.script.run);
     const hostedBridge = !gasRuntime && location.protocol === 'https:' && location.hostname.endsWith('github.io');
     const live = gasRuntime || hostedBridge;
@@ -489,7 +489,12 @@
       $('loadSample').disabled = true;
       debugState.request = { action: 'recommend', payload: { text: text } };
       debugState.response = null;
-      setStatus('AI 正在理解你的樂器需求…', 'info');
+      const startedAt = Date.now();
+      setStatus('AI 正在理解你的樂器需求…通常需要 20–60 秒。', 'info');
+      const progressTimer = setInterval(() => {
+        const seconds = Math.floor((Date.now() - startedAt) / 1000);
+        setStatus('AI 正在分析中…已等待 ' + seconds + ' 秒，請不要重複送出。', 'info');
+      }, 5000);
 
       try {
         const data = await requestRecommendation(text);
@@ -500,6 +505,7 @@
         debugState.response = { error: error.message };
         setStatus(error.message, 'error');
       } finally {
+        clearInterval(progressTimer);
         busy = false;
         $('loadSample').disabled = false;
         updateSubmitState();
