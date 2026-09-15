@@ -23,7 +23,19 @@ const INSTRUMENT_CATALOG = [
   { id: 'electronic_drums', name: '電子鼓', sound: '節奏強、音色可變', portability: '低', volume: '可用耳機，但踏板仍有震動', difficulty: '中等', styles: ['流行', '搖滾', '爵士', '節奏訓練'], environment: '適合固定空間，仍需處理踏板震動', costLevel: '高' }
 ];
 
-function doGet() {
+function doGet(event) {
+  const params = event && event.parameter ? event.parameter : {};
+  if (params.action === 'recommend') {
+    const callback = String(params.callback || '');
+    if (!/^[A-Za-z_$][A-Za-z0-9_$]{0,80}$/.test(callback)) {
+      return ContentService.createTextOutput('/* invalid callback */')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    const response = api('recommend', { text: decodeBase64Url_(params.q) });
+    const json = JSON.stringify(response).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+    return ContentService.createTextOutput(callback + '(' + json + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('語音 AI 樂器推薦助手')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -104,7 +116,9 @@ function recommend_(payload) {
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: schema,
-      temperature: 0.2
+      temperature: 0.2,
+      maxOutputTokens: 1200,
+      thinkingConfig: { thinkingLevel: 'minimal' }
     }
   };
 
@@ -211,6 +225,17 @@ function property_(key) {
   const value = PropertiesService.getScriptProperties().getProperty(key);
   if (!value || !value.trim()) fail_('尚未設定指令碼屬性：' + key);
   return value.trim();
+}
+
+function decodeBase64Url_(value) {
+  try {
+    const encoded = String(value || '');
+    if (!encoded || encoded.length > 12000 || !/^[A-Za-z0-9_-]+$/.test(encoded)) fail_('請求格式不正確。');
+    return Utilities.newBlob(Utilities.base64DecodeWebSafe(encoded)).getDataAsString('UTF-8');
+  } catch (error) {
+    if (error && error.safe) throw error;
+    fail_('請求格式不正確。');
+  }
 }
 
 function fail_(message) {

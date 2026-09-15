@@ -61,6 +61,7 @@
     .transcript { min-height: 4.8rem; margin: 1rem 0; padding: 1rem; border: 1px dashed #806b52; border-radius: .45rem; background: #15100d; color: #f1e8d9; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
     .transcript.listening { border-color: var(--cyan); box-shadow: inset 0 0 0 1px #67e8f944; }
     .speech-note, .counter { margin: .6rem 0; font-size: .9rem; color: var(--muted); }
+    .voice-site-link { display: inline-block; margin: 0 0 .9rem; color: #f0d58d; text-underline-offset: .2em; }
     .counter { text-align: right; }
     .dev-toggle { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--line); }
     .check { display: inline-flex; gap: .65rem; align-items: center; color: #e4edfb; }
@@ -132,6 +133,7 @@
             <button id="retrySpeech" type="button">重新錄音</button>
           </div>
           <p id="speechNote" class="speech-note">請允許麥克風權限，說完後再確認辨識文字。</p>
+          <a id="voiceSiteLink" class="voice-site-link" href="https://sanman931020.github.io/0915-voice-ai-instrument-assistant/" target="_blank" rel="noopener" hidden>開啟可使用麥克風的公開語音版</a>
           <div id="transcript" class="transcript" role="textbox" aria-readonly="true" aria-label="語音辨識文字" aria-live="polite">尚未開始辨識。</div>
         </div>
 
@@ -181,7 +183,10 @@
     'use strict';
 
     const $ = id => document.getElementById(id);
-    const live = Boolean(window.google && google.script && google.script.run);
+    const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzQtPLII2lneqQwY4LFpfpfLfp-opMJOFwBV4dgcqozave8TSzpOlaAja8ZXB7hcQ1I/exec';
+    const gasRuntime = Boolean(window.google && google.script && google.script.run);
+    const hostedBridge = !gasRuntime && location.protocol === 'https:' && location.hostname.endsWith('github.io');
+    const live = gasRuntime || hostedBridge;
     const SpeechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     const instruments = {
       ukulele: { name: '烏克麗麗', mark: 'UK' },
@@ -201,8 +206,8 @@
     let interimTranscript = '';
     let busy = false;
     let debugState = {
-      environment: live ? 'GAS' : 'local preview',
-      speechSupported: Boolean(SpeechAPI && window.isSecureContext),
+      environment: gasRuntime ? 'GAS iframe' : (hostedBridge ? 'GitHub Pages + GAS' : 'local preview'),
+      speechSupported: Boolean(SpeechAPI && window.isSecureContext && !gasRuntime),
       inputMode: 'voice',
       transcript: '',
       request: null,
@@ -272,6 +277,11 @@
 
     function startSpeech() {
       if (busy || listening) return;
+      if (gasRuntime) {
+        $('voiceSiteLink').hidden = false;
+        openDeveloperTextFallback('GAS 會把網頁放在沙盒框架中，Chrome 不允許該框架使用語音辨識。請點「開啟可使用麥克風的公開語音版」。');
+        return;
+      }
       if (!SpeechAPI || !window.isSecureContext) {
         openDeveloperTextFallback('這個環境無法使用瀏覽器語音辨識，已切換成文字輸入。請改用 Chrome／Edge 的 HTTPS 或 localhost 再測試麥克風。');
         return;
@@ -415,7 +425,39 @@
       };
     }
 
+    function requestViaJsonp(text) {
+      return new Promise((resolve, reject) => {
+        const callbackName = '__instrumentAi_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        const script = document.createElement('script');
+        const bytes = new TextEncoder().encode(text);
+        let binary = '';
+        bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+        const encodedText = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const cleanup = () => {
+          clearTimeout(timer);
+          script.remove();
+          delete window[callbackName];
+        };
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('GAS 回應逾時，請稍後再試。'));
+        }, 90000);
+        window[callbackName] = response => {
+          cleanup();
+          if (response && response.ok) resolve(response.data);
+          else reject(new Error(response && response.error ? response.error : '伺服端沒有回傳有效結果。'));
+        };
+        script.onerror = () => {
+          cleanup();
+          reject(new Error('無法連接 GAS 後端，請檢查部署連結。'));
+        };
+        script.src = GAS_ENDPOINT + '?action=recommend&callback=' + encodeURIComponent(callbackName) + '&q=' + encodeURIComponent(encodedText);
+        document.head.appendChild(script);
+      });
+    }
+
     function requestRecommendation(text) {
+      if (hostedBridge) return requestViaJsonp(text);
       return new Promise((resolve, reject) => {
         google.script.run
           .withSuccessHandler(response => {
@@ -503,11 +545,14 @@
       updateDebug();
     });
 
-    $('appMode').textContent = live ? 'GAS 連線模式｜可使用 Gemini' : '本機固定示範｜不會呼叫 Gemini';
+    $('appMode').textContent = gasRuntime
+      ? 'GAS 後端模式｜語音請使用公開版'
+      : (hostedBridge ? '公開語音版｜GAS + Gemini' : '本機固定示範｜不會呼叫 Gemini');
+    $('voiceSiteLink').hidden = !gasRuntime;
     updateDebug();
     updateSubmitState();
 
-    if (!SpeechAPI || !window.isSecureContext) {
+    if (!gasRuntime && (!SpeechAPI || !window.isSecureContext)) {
       openDeveloperTextFallback('此環境不支援瀏覽器語音辨識，已自動切換成文字輸入。');
       $('startSpeech').disabled = true;
     }
