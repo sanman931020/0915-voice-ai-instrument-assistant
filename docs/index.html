@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="用語音或文字描述需求，讓 AI 從固定清單中推薦適合的入門樂器。">
+  <title>語音 AI 樂器推薦助手</title>
+  <style>
+    :root {
+      font-family: Georgia, "Noto Serif TC", "PMingLiU", "Microsoft JhengHei", serif;
+      color: #f2eadc;
+      background: #17120e;
+      color-scheme: dark;
+      --bg: #17120e;
+      --panel: #251d17;
+      --panel-2: #2d231b;
+      --line: #715e46;
+      --muted: #c8bba9;
+      --cyan: #d2b06a;
+      --cyan-dark: #493922;
+      --amber: #e2c27a;
+      --amber-dark: #3b2d19;
+      --danger: #e7a283;
+      --success: #b7c8a3;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 80% 0%, #443224 0, transparent 36rem), linear-gradient(180deg, #1a1410, #100d0a 72%), var(--bg); }
+    button, textarea, input { font: inherit; }
+    button { min-height: 46px; padding: .72rem 1rem; border: 1px solid #806c51; border-radius: .45rem; background: #3a2d23; color: #f7efe3; cursor: pointer; letter-spacing: .03em; }
+    button:hover:not(:disabled) { filter: brightness(1.14); }
+    button:disabled { opacity: .48; cursor: not-allowed; }
+    button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+    button.primary { background: linear-gradient(180deg, #ead18e, #cda85c); border-color: #efd99d; color: #261a0a; font-weight: 800; }
+    button.voice { background: var(--cyan-dark); border-color: var(--cyan); }
+    button.segment[aria-pressed="true"] { background: var(--cyan); border-color: var(--cyan); color: #06232b; font-weight: 800; }
+    textarea { width: 100%; min-height: 8rem; padding: .9rem; border: 1px solid #7a664e; border-radius: .45rem; background: #130f0c; color: #f5ede1; resize: vertical; line-height: 1.65; }
+    h1 { margin: .35rem 0 .7rem; font-size: clamp(2rem, 5vw, 3.6rem); line-height: 1.12; letter-spacing: .015em; font-weight: 600; }
+    h2 { margin: 0 0 1rem; font-size: 1.35rem; }
+    h3 { margin: 0 0 .4rem; font-size: 1.12rem; }
+    p { color: var(--muted); line-height: 1.75; }
+    [hidden] { display: none !important; }
+
+    .shell { width: min(1160px, calc(100% - 2rem)); margin: 0 auto; }
+    header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 1.2rem 0; border-bottom: 3px double var(--line); }
+    header strong { letter-spacing: .1em; color: #ead9b7; }
+    header strong::before { content: "◆"; margin-right: .65rem; color: var(--amber); font-size: .75em; }
+    .mode-badge { color: var(--cyan); font-size: .88rem; text-align: right; }
+    main { padding: 2.2rem 0 3rem; }
+    .hero { display: grid; grid-template-columns: minmax(0, .88fr) minmax(420px, 1.12fr); gap: 1.5rem; align-items: start; }
+    .intro { padding: 1.5rem .4rem 1rem 0; }
+    .eyebrow { color: var(--cyan); font-size: .82rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+    .examples { margin-top: 1.3rem; padding: 1rem 1.1rem; border-left: 3px solid var(--amber); background: #251c15; border-radius: 0 .35rem .35rem 0; color: #eadfce; line-height: 1.8; }
+    .panel { position: relative; padding: 1.35rem; border: 1px solid var(--line); border-radius: .65rem; background: linear-gradient(145deg, rgba(45, 34, 26, .98), rgba(27, 21, 17, .98)); box-shadow: 0 22px 70px #0007, inset 0 0 0 3px #17110d; }
+    .panel::before { content: ""; position: absolute; inset: .38rem; border: 1px solid #806a4938; border-radius: .35rem; pointer-events: none; }
+    .row { display: flex; gap: .7rem; flex-wrap: wrap; align-items: center; }
+    .status { margin: 1rem 0; padding: .85rem 1rem; border-left: 3px solid var(--cyan); background: #18120e; color: #eadfce; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .status.error { border-color: var(--danger); color: #ffd8c5; }
+    .status.success { border-color: var(--success); color: #d1fae5; }
+    .transcript { min-height: 4.8rem; margin: 1rem 0; padding: 1rem; border: 1px dashed #806b52; border-radius: .45rem; background: #15100d; color: #f1e8d9; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .transcript.listening { border-color: var(--cyan); box-shadow: inset 0 0 0 1px #67e8f944; }
+    .speech-note, .counter { margin: .6rem 0; font-size: .9rem; color: var(--muted); }
+    .counter { text-align: right; }
+    .dev-toggle { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+    .check { display: inline-flex; gap: .65rem; align-items: center; color: #e4edfb; }
+    .check input { width: 1.15rem; height: 1.15rem; margin: 0; }
+    .developer { margin-top: 1rem; padding: 1rem; border: 1px dashed #77634a; border-radius: .45rem; background: #18120e; }
+    .segment-row { margin-bottom: 1rem; }
+    .debug { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+    .debug pre { max-height: 18rem; overflow: auto; margin: .6rem 0 0; padding: .85rem; border-radius: .35rem; background: #0e0b09; color: #dfc98f; font: .8rem/1.55 Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .results { margin-top: 1.5rem; padding: 1.4rem; border: 1px solid var(--line); border-radius: .65rem; background: #211914; box-shadow: inset 0 0 0 3px #130f0c; }
+    .empty { padding: 1.2rem; border: 1px dashed #526983; border-radius: .8rem; color: var(--muted); line-height: 1.7; }
+    .understanding { padding: 1rem; border-left: 3px solid var(--cyan); background: #302419; border-radius: 0 .35rem .35rem 0; line-height: 1.75; }
+    .chip-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
+    .chip { padding: .35rem .7rem; border: 1px solid #806a4e; border-radius: 999px; color: #ecdfca; font-size: .86rem; }
+    .uncertain { border-color: #8a713a; color: #ffe7ac; }
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .card { min-width: 0; padding: 1rem; border: 1px solid #745f46; border-radius: .5rem; background: var(--panel-2); }
+    .card:first-child { border-color: var(--amber); box-shadow: inset 0 3px 0 var(--amber); }
+    .instrument-mark { display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: .8rem; border: 1px solid #957b50; border-radius: 50%; background: #21170f; color: var(--cyan); font-weight: 900; letter-spacing: .04em; }
+    .confidence { color: var(--amber); font-weight: 800; }
+    .card p { margin: .65rem 0 0; font-size: .94rem; }
+    .watch { padding-top: .65rem; border-top: 1px solid #64523f; }
+    .follow-up { margin-top: 1rem; padding: 1rem; border-radius: .8rem; background: var(--amber-dark); color: #ffedbd; line-height: 1.7; }
+    footer { padding: 1.3rem 0 2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; line-height: 1.7; }
+
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; }
+      .intro { padding-right: 0; }
+      .cards { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      .shell { width: min(100% - 1.1rem, 1160px); }
+      header { align-items: flex-start; }
+      main { padding-top: 1.4rem; }
+      .panel, .results { padding: 1rem; }
+      .row > button { flex: 1 1 9rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="shell">
+    <strong>樂聲雅集｜Instrument Finder</strong>
+    <span id="appMode" class="mode-badge">正在確認執行環境…</span>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="intro">
+        <div class="eyebrow">Voice × AI × Instruments</div>
+        <h1>說出你想要的感覺，找到適合的樂器。</h1>
+        <p>不用先知道樂器名稱。描述喜歡的聲音、練習環境或攜帶需求，系統會先理解你的意思，再從固定清單中提出建議。</p>
+        <div class="examples">
+          可以試著說：<br>
+          「我想找簡單、方便帶去學校的樂器」<br>
+          「住公寓，想練節奏但不能太吵」
+        </div>
+      </div>
+
+      <section class="panel" aria-labelledby="inputTitle">
+        <div class="eyebrow">Tell us what you need</div>
+        <h2 id="inputTitle">描述你的樂器需求</h2>
+
+        <div id="voicePanel">
+          <div class="row">
+            <button id="startSpeech" class="voice" type="button">開始說話</button>
+            <button id="stopSpeech" type="button" disabled>停止</button>
+            <button id="retrySpeech" type="button">重新錄音</button>
+          </div>
+          <p id="speechNote" class="speech-note">請允許麥克風權限，說完後再確認辨識文字。</p>
+          <div id="transcript" class="transcript" role="textbox" aria-readonly="true" aria-label="語音辨識文字" aria-live="polite">尚未開始辨識。</div>
+        </div>
+
+        <div id="textPanel" hidden>
+          <label for="textInput">文字輸入</label>
+          <textarea id="textInput" maxlength="2000" placeholder="例如：我喜歡溫柔的聲音，希望樂器不要太大，預算也不要太高。"></textarea>
+          <div id="textCounter" class="counter">0 / 2000</div>
+        </div>
+
+        <div class="row">
+          <button id="submitRequest" class="primary" type="button" disabled>請 AI 推薦樂器</button>
+          <button id="loadSample" type="button">載入固定示範</button>
+        </div>
+
+        <div class="dev-toggle">
+          <label class="check"><input id="developerMode" type="checkbox"> 開發者模式</label>
+        </div>
+
+        <section id="developerPanel" class="developer" aria-labelledby="developerTitle" hidden>
+          <h3 id="developerTitle">開發者工具</h3>
+          <p class="speech-note">切換輸入方式，並檢查語音辨識、GAS 與 AI 的資料流程。</p>
+          <div class="row segment-row" role="group" aria-label="輸入方式">
+            <button id="voiceMode" class="segment" type="button" aria-pressed="true">麥克風</button>
+            <button id="textMode" class="segment" type="button" aria-pressed="false">文字輸入</button>
+          </div>
+          <div class="debug">
+            <strong>執行資訊</strong>
+            <pre id="debugText">尚未執行。</pre>
+          </div>
+        </section>
+
+        <div id="status" class="status" role="status" aria-live="polite">準備好了，請先描述你的需求。</div>
+      </section>
+    </section>
+
+    <section id="results" class="results" aria-labelledby="resultTitle" aria-live="polite">
+      <h2 id="resultTitle">樂器推薦結果</h2>
+      <div class="empty">送出需求後，這裡會顯示 AI 的理解、推薦原因與需要注意的地方。</div>
+    </section>
+  </main>
+
+  <footer class="shell">
+    語音辨識由瀏覽器提供；AI 推薦需部署 Google Apps Script 並設定 Gemini API。建議僅輸入非敏感的測試內容。
+  </footer>
+
+  <script>
+    'use strict';
+
+    const $ = id => document.getElementById(id);
+    const live = Boolean(window.google && google.script && google.script.run);
+    const SpeechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const instruments = {
+      ukulele: { name: '烏克麗麗', mark: 'UK' },
+      acoustic_guitar: { name: '木吉他', mark: 'AG' },
+      digital_piano: { name: '數位鋼琴', mark: 'DP' },
+      violin: { name: '小提琴', mark: 'VN' },
+      cajon: { name: '木箱鼓', mark: 'CJ' },
+      flute: { name: '長笛', mark: 'FL' },
+      saxophone: { name: '薩克斯風', mark: 'SX' },
+      electronic_drums: { name: '電子鼓', mark: 'ED' }
+    };
+
+    let inputMode = 'voice';
+    let recognition = null;
+    let listening = false;
+    let finalTranscript = '';
+    let interimTranscript = '';
+    let busy = false;
+    let debugState = {
+      environment: live ? 'GAS' : 'local preview',
+      speechSupported: Boolean(SpeechAPI && window.isSecureContext),
+      inputMode: 'voice',
+      transcript: '',
+      request: null,
+      response: null,
+      state: 'ready'
+    };
+
+    function setStatus(message, type) {
+      const status = $('status');
+      status.textContent = message;
+      status.classList.toggle('error', type === 'error');
+      status.classList.toggle('success', type === 'success');
+      debugState.state = type || 'info';
+      updateDebug();
+    }
+
+    function updateDebug() {
+      $('debugText').textContent = JSON.stringify(debugState, null, 2);
+    }
+
+    function currentText() {
+      return inputMode === 'text' ? $('textInput').value.trim() : finalTranscript.trim();
+    }
+
+    function updateSubmitState() {
+      $('submitRequest').disabled = busy || currentText().length === 0;
+    }
+
+    function stopRecognition() {
+      if (recognition && listening) {
+        try { recognition.stop(); } catch (error) { /* Recognition may already be ending. */ }
+      }
+    }
+
+    function setInputMode(mode, reason) {
+      if (mode !== 'voice' && mode !== 'text') return;
+      if (mode === 'text') stopRecognition();
+      inputMode = mode;
+      $('voicePanel').hidden = mode !== 'voice';
+      $('textPanel').hidden = mode !== 'text';
+      $('voiceMode').setAttribute('aria-pressed', String(mode === 'voice'));
+      $('textMode').setAttribute('aria-pressed', String(mode === 'text'));
+      debugState.inputMode = mode;
+      if (reason) setStatus(reason, mode === 'text' ? 'error' : 'info');
+      updateSubmitState();
+      updateDebug();
+      if (mode === 'text') $('textInput').focus();
+    }
+
+    function openDeveloperTextFallback(message) {
+      $('developerMode').checked = true;
+      $('developerPanel').hidden = false;
+      setInputMode('text', message);
+    }
+
+    function resetTranscript() {
+      stopRecognition();
+      finalTranscript = '';
+      interimTranscript = '';
+      $('transcript').textContent = '尚未開始辨識。';
+      $('transcript').classList.remove('listening');
+      $('speechNote').textContent = '請允許麥克風權限，說完後再確認辨識文字。';
+      debugState.transcript = '';
+      updateSubmitState();
+      updateDebug();
+    }
+
+    function startSpeech() {
+      if (busy || listening) return;
+      if (!SpeechAPI || !window.isSecureContext) {
+        openDeveloperTextFallback('這個環境無法使用瀏覽器語音辨識，已切換成文字輸入。請改用 Chrome／Edge 的 HTTPS 或 localhost 再測試麥克風。');
+        return;
+      }
+
+      finalTranscript = '';
+      interimTranscript = '';
+      recognition = new SpeechAPI();
+      recognition.lang = 'zh-TW';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        listening = true;
+        $('startSpeech').disabled = true;
+        $('stopSpeech').disabled = false;
+        $('transcript').classList.add('listening');
+        $('transcript').textContent = '正在聆聽…';
+        $('speechNote').textContent = '正在收音，請自然說出你喜歡的聲音、環境或需求。';
+        debugState.state = 'listening';
+        updateSubmitState();
+        updateDebug();
+      };
+
+      recognition.onresult = event => {
+        let finalPart = '';
+        let interimPart = '';
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const phrase = event.results[index][0].transcript;
+          if (event.results[index].isFinal) finalPart += phrase;
+          else interimPart += phrase;
+        }
+        if (finalPart) finalTranscript += finalPart;
+        interimTranscript = interimPart;
+        $('transcript').textContent = finalTranscript || interimTranscript || '正在聆聽…';
+        debugState.transcript = finalTranscript || interimTranscript;
+        updateSubmitState();
+        updateDebug();
+      };
+
+      recognition.onerror = event => {
+        const messages = {
+          'not-allowed': '麥克風權限被拒絕，已切換成文字輸入。',
+          'service-not-allowed': '目前環境不允許語音服務，已切換成文字輸入。',
+          'audio-capture': '找不到可用的麥克風，已切換成文字輸入。',
+          'network': '語音辨識服務連線失敗，請檢查網路或改用文字輸入。',
+          'no-speech': '沒有辨識到語音，請再試一次。',
+          'aborted': '收音已停止。'
+        };
+        const message = messages[event.error] || ('語音辨識失敗：' + event.error);
+        if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
+          openDeveloperTextFallback(message);
+        } else {
+          setStatus(message, event.error === 'aborted' ? 'info' : 'error');
+        }
+      };
+
+      recognition.onend = () => {
+        listening = false;
+        $('startSpeech').disabled = false;
+        $('stopSpeech').disabled = true;
+        $('transcript').classList.remove('listening');
+        if (finalTranscript) {
+          $('speechNote').textContent = '辨識完成。請核對上方文字，再送給 AI。';
+          setStatus('已取得語音文字，等待你確認後送出。', 'success');
+        } else if (inputMode === 'voice') {
+          $('speechNote').textContent = '沒有取得完整文字，請重新錄音。';
+        }
+        updateSubmitState();
+      };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        setStatus('無法啟動語音辨識，請稍後再試或改用文字輸入。', 'error');
+      }
+    }
+
+    function element(tag, className, textValue) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (typeof textValue === 'string') node.textContent = textValue;
+      return node;
+    }
+
+    function renderChips(parent, values, uncertain) {
+      if (!Array.isArray(values) || values.length === 0) return;
+      const list = element('div', 'chip-list');
+      values.forEach(value => list.appendChild(element('span', uncertain ? 'chip uncertain' : 'chip', value)));
+      parent.appendChild(list);
+    }
+
+    function renderResult(data, sourceLabel) {
+      const results = $('results');
+      results.replaceChildren();
+      const heading = element('h2', '', '樂器推薦結果');
+      heading.id = 'resultTitle';
+      results.appendChild(heading);
+
+      const understanding = element('section', 'understanding');
+      understanding.appendChild(element('strong', '', '我理解你的需求：'));
+      understanding.appendChild(document.createTextNode(' ' + data.understanding.summary));
+      understanding.appendChild(element('div', 'speech-note', sourceLabel));
+      renderChips(understanding, data.understanding.preferences, false);
+      renderChips(understanding, data.understanding.uncertainties, true);
+      results.appendChild(understanding);
+
+      const cards = element('div', 'cards');
+      data.recommendations.forEach((recommendation, index) => {
+        const instrument = instruments[recommendation.id];
+        if (!instrument) return;
+        const card = element('article', 'card');
+        card.appendChild(element('div', 'instrument-mark', instrument.mark));
+        card.appendChild(element('h3', '', (index === 0 ? '首選｜' : '') + instrument.name));
+        card.appendChild(element('div', 'confidence', Math.round(recommendation.confidence * 100) + '% 符合'));
+        card.appendChild(element('p', '', recommendation.reason));
+        const watch = element('p', 'watch');
+        watch.appendChild(element('strong', '', '先注意：'));
+        watch.appendChild(document.createTextNode(' ' + recommendation.watchOut));
+        card.appendChild(watch);
+        cards.appendChild(card);
+      });
+      results.appendChild(cards);
+      results.appendChild(element('div', 'follow-up', '下一步可以補充：' + data.followUpTip));
+      results.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    }
+
+    function sampleData() {
+      return {
+        understanding: {
+          summary: '你想找適合初學者、方便帶去學校，而且聲音不會太大的樂器。',
+          preferences: ['初學友善', '方便攜帶', '音量適中'],
+          uncertainties: ['尚未提供預算', '尚未提供喜歡的曲風']
+        },
+        recommendations: [
+          { id: 'ukulele', confidence: 0.91, reason: '體積小、方便攜帶，基礎和弦相對容易上手，適合用來伴奏。', watchOut: '琴格較小，選購前仍建議實際試握。' },
+          { id: 'cajon', confidence: 0.72, reason: '適合喜歡節奏與團體合作的人，也比完整鼓組容易攜帶。', watchOut: '敲擊仍會產生明顯聲響，需要留意練習環境。' }
+        ],
+        followUpTip: '告訴我你喜歡的曲風、預算範圍，以及平常可以多大聲練習。'
+      };
+    }
+
+    function requestRecommendation(text) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(response => {
+            if (response && response.ok) resolve(response.data);
+            else reject(new Error(response && response.error ? response.error : '伺服端沒有回傳有效結果。'));
+          })
+          .withFailureHandler(() => reject(new Error('GAS 連線或授權失敗，請檢查部署與執行紀錄。')))
+          .api('recommend', { text: text });
+      });
+    }
+
+    async function submit() {
+      const text = currentText();
+      if (!text) {
+        setStatus('請先說出或輸入你的需求。', 'error');
+        return;
+      }
+      if (text.length > 2000) {
+        setStatus('輸入內容不可超過 2000 字。', 'error');
+        return;
+      }
+      if (!live) {
+        setStatus('目前是本機固定示範模式，沒有呼叫 Gemini。請部署 GAS /exec 後再測試真實 AI。', 'error');
+        return;
+      }
+
+      busy = true;
+      updateSubmitState();
+      $('loadSample').disabled = true;
+      debugState.request = { action: 'recommend', payload: { text: text } };
+      debugState.response = null;
+      setStatus('AI 正在理解你的樂器需求…', 'info');
+
+      try {
+        const data = await requestRecommendation(text);
+        debugState.response = data;
+        renderResult(data, 'Gemini AI｜回傳內容已由 GAS 驗證');
+        setStatus('推薦完成。請查看 AI 的理解與樂器建議。', 'success');
+      } catch (error) {
+        debugState.response = { error: error.message };
+        setStatus(error.message, 'error');
+      } finally {
+        busy = false;
+        $('loadSample').disabled = false;
+        updateSubmitState();
+        updateDebug();
+      }
+    }
+
+    $('startSpeech').addEventListener('click', startSpeech);
+    $('stopSpeech').addEventListener('click', stopRecognition);
+    $('retrySpeech').addEventListener('click', () => {
+      resetTranscript();
+      setStatus('辨識文字已清除，可以重新錄音。', 'info');
+    });
+    $('submitRequest').addEventListener('click', submit);
+    $('loadSample').addEventListener('click', () => {
+      const sample = '我想找簡單、方便帶去學校，而且不要太大聲的樂器。';
+      if (inputMode === 'text') {
+        $('textInput').value = sample;
+        $('textCounter').textContent = sample.length + ' / 2000';
+      } else {
+        finalTranscript = sample;
+        $('transcript').textContent = sample;
+        debugState.transcript = sample;
+      }
+      debugState.request = { source: 'fixed local sample', text: sample };
+      debugState.response = sampleData();
+      renderResult(sampleData(), '固定示範資料｜這次沒有呼叫 Gemini');
+      setStatus('已載入固定示範；這不是 Gemini 的真實回覆。', 'success');
+      updateSubmitState();
+      updateDebug();
+    });
+    $('developerMode').addEventListener('change', event => {
+      $('developerPanel').hidden = !event.target.checked;
+      if (!event.target.checked && inputMode === 'text') setInputMode('voice');
+      updateDebug();
+    });
+    $('voiceMode').addEventListener('click', () => setInputMode('voice'));
+    $('textMode').addEventListener('click', () => setInputMode('text'));
+    $('textInput').addEventListener('input', event => {
+      $('textCounter').textContent = event.target.value.length + ' / 2000';
+      debugState.transcript = event.target.value;
+      updateSubmitState();
+      updateDebug();
+    });
+
+    $('appMode').textContent = live ? 'GAS 連線模式｜可使用 Gemini' : '本機固定示範｜不會呼叫 Gemini';
+    updateDebug();
+    updateSubmitState();
+
+    if (!SpeechAPI || !window.isSecureContext) {
+      openDeveloperTextFallback('此環境不支援瀏覽器語音辨識，已自動切換成文字輸入。');
+      $('startSpeech').disabled = true;
+    }
+  </script>
+</body>
+</html>
